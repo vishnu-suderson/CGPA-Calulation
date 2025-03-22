@@ -169,6 +169,6 @@ pip install flask selenium webdriver-manager requests
 
 🔹 **Developer:** M.VISHNU SUDERSON  
 🔹 **Email:** m.vishnusuderson@gmail.com  
-🔹 **GitHub:** [Vishnu-suderson](https://github.com/your-username)  
+🔹 **GitHub:** [Vishnu-suderson](https://github.com/vishnu-suderson/)  
 
 ---
