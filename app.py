@@ -18,7 +18,7 @@ logged_in_lock = threading.Lock()
 
 def create_driver():
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Remove for visual debugging if needed
+    chrome_options.add_argument("--headless=new")  # Use new headless mode for compatibility
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
@@ -28,6 +28,7 @@ def create_driver():
     chrome_options.add_argument("--disable-logging")
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument("--disable-animations")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     
     # Disable images, CSS, etc.
     prefs = {
@@ -50,39 +51,34 @@ def create_driver():
 def login_and_store_driver(username, password):
     driver = create_driver()
     try:
-        print("Opening login page...")
+        app.logger.info("Opening login page...")
         driver.get("https://arms.sse.saveetha.com/")
-        print("Page loaded. Current URL:", driver.current_url)
+        app.logger.info("Page loaded. Current URL: %s", driver.current_url)
 
         wait = WebDriverWait(driver, 10)
         username_field = wait.until(EC.presence_of_element_located((By.ID, "txtusername")))
         password_field = driver.find_element(By.ID, "txtpassword")
         login_button = driver.find_element(By.ID, "btnlogin")
 
-        print("Entering credentials...")
+        app.logger.info("Entering credentials for user: %s", username)
         username_field.send_keys(username)
         password_field.send_keys(password)
         login_button.click()
 
-        print("Login button clicked. Waiting for redirection...")
-        time.sleep(2)
-        print("Current URL after login:", driver.current_url)
-
-        if "Landing.aspx" not in driver.current_url:
-            print("Login failed. Expected 'Landing.aspx' in URL but got:", driver.current_url)
-            driver.quit()
-            return None
+        app.logger.info("Login button clicked. Waiting for redirection...")
+        wait.until(EC.url_contains("Landing.aspx"))
+        app.logger.info("Login successful. Current URL: %s", driver.current_url)
 
         with logged_in_lock:
             logged_in_drivers[username] = driver
-        print("Login successful and driver stored for user:", username)
+        app.logger.info("Driver stored for user: %s", username)
         return driver
     except Exception as e:
-        print("Login exception:", e)
+        app.logger.error("Login exception: %s", e)
         traceback.print_exc()
         try:
             driver.quit()
-        except:
+        except Exception:
             pass
         return None
 
@@ -99,48 +95,43 @@ def fetch_grades():
     if not username or not password:
         return jsonify({"success": False, "message": "Missing credentials"})
 
-    # Get or create a logged-in driver
     with logged_in_lock:
         driver = logged_in_drivers.get(username)
 
     if not driver:
-        print("No persistent session found. Logging in...")
+        app.logger.info("No persistent session found. Logging in user: %s", username)
         driver = login_and_store_driver(username, password)
         if not driver:
             return jsonify({"success": False, "message": "Login failed, please check credentials"})
 
     try:
         start_time = time.time()
-
-        # Step 1: Navigate to Student Profile page
-        print("Navigating to Student Profile page...")
+        app.logger.info("Navigating to Student Profile page for user: %s", username)
         driver.get("https://arms.sse.saveetha.com/StudentPortal/DataProfile.aspx")
-        print("Navigated to profile page. Current URL:", driver.current_url)
+        app.logger.info("Profile page loaded. Current URL: %s", driver.current_url)
 
-        # Retry mechanism to wait for non-empty 'dvname' text
+        # Retry mechanism for non-empty 'dvname'
         retries = 3
         profile_loaded = False
         for attempt in range(retries):
             try:
-                wait_table = WebDriverWait(driver, 15)
-                # Wait until the 'dvname' element is present and its text is non-empty.
-                wait_table.until(lambda d: d.find_element(By.ID, "dvname").text.strip() != "")
+                wait_profile = WebDriverWait(driver, 15)
+                wait_profile.until(lambda d: d.find_element(By.ID, "dvname").text.strip() != "")
                 element = driver.find_element(By.ID, "dvname")
-                print(f"Attempt {attempt+1}: 'dvname' element loaded with text: '{element.text.strip()}'")
+                app.logger.info("Attempt %d: 'dvname' loaded with text: '%s'", attempt+1, element.text.strip())
                 profile_loaded = True
                 break
             except Exception as e:
-                print(f"Attempt {attempt+1} failed: {e}")
+                app.logger.warning("Attempt %d failed: %s", attempt+1, e)
                 time.sleep(2)
         
         if not profile_loaded:
-            print("Failed to load profile page after retries.")
-            print("Current URL:", driver.current_url)
-            print("Page Source snippet:", driver.page_source[:1000])
+            app.logger.error("Failed to load profile page after %d attempts.", retries)
+            app.logger.debug("Current URL: %s", driver.current_url)
+            app.logger.debug("Page Source snippet: %s", driver.page_source[:1000])
             return jsonify({"success": False, "message": "Failed to load profile page. Possibly logged out."})
 
-        # Step 2: Extract student profile data
-        print("Extracting student data...")
+        app.logger.info("Extracting student profile data...")
         student_data = driver.execute_script("""
             return {
                 name: document.getElementById('dvname').textContent.trim(),
@@ -149,23 +140,20 @@ def fetch_grades():
                 imgUrl: document.getElementById('imgprofile').src
             };
         """)
-        print("Student data extracted:", student_data)
+        app.logger.info("Student data extracted: %s", student_data)
 
-        # Step 3: Navigate to Grades page
-        print("Navigating to Grades page...")
+        app.logger.info("Navigating to Grades page...")
         driver.get("https://arms.sse.saveetha.com/StudentPortal/MyCourse.aspx")
-        print("Grades page loaded. Current URL:", driver.current_url)
+        app.logger.info("Grades page loaded. Current URL: %s", driver.current_url)
         WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, "tblGridViewComplete")))
-        time.sleep(3)
+        time.sleep(2)  # Extra time for the table to fully render
 
-        # Step 4: Extract grades data
-        print("Extracting grades data...")
+        app.logger.info("Extracting grades data...")
         results = driver.execute_script("""
             var table = document.getElementById('tblGridViewComplete');
             var rows = table.getElementsByTagName('tr');
             var results = [];
             var gradePointMapping = {"S": 10, "A": 9, "B": 8, "C": 7, "D": 6, "E": 5};
-
             for (var i = 1; i < rows.length; i++) {
                 var cells = rows[i].getElementsByTagName('td');
                 if (cells.length < 6) continue;
@@ -188,17 +176,11 @@ def fetch_grades():
             }
             return results;
         """)
-        print("Grades data extracted:", results)
+        app.logger.info("Grades data extracted: %s", results)
 
-        # Calculate CGPA
-        if results:
-            total_points = sum(course['points'] for course in results)
-            cgpa = total_points / len(results)
-        else:
-            cgpa = 0
-
+        cgpa = (sum(course['points'] for course in results) / len(results)) if results else 0
         elapsed = time.time() - start_time
-        print(f"Total execution time: {elapsed:.2f}s")
+        app.logger.info("Total execution time: %.2fs", elapsed)
 
         return jsonify({
             "success": True,
@@ -208,10 +190,9 @@ def fetch_grades():
             "execution_time": elapsed
         })
     except Exception as e:
-        print("Fetch grades exception:", e)
+        app.logger.error("Fetch grades exception: %s", e)
         traceback.print_exc()
         return jsonify({"success": False, "message": str(e)})
-
 
 @app.route('/attendance', methods=['POST'])
 def attendance():
@@ -233,23 +214,21 @@ def attendance():
             return jsonify({"success": False, "message": "Login failed, please check credentials"})
 
     try:
-        print("Navigating to Attendance Report page...")
+        app.logger.info("Navigating to Attendance Report page...")
         driver.get("https://arms.sse.saveetha.com/StudentPortal/AttendanceReport.aspx")
-        print("Attendance page loaded. Current URL:", driver.current_url)
+        app.logger.info("Attendance page loaded. Current URL: %s", driver.current_url)
         wait = WebDriverWait(driver, 15)
         wait.until(EC.presence_of_element_located((By.ID, "tblStudent")))
-        print("Attendance table located.")
+        app.logger.info("Attendance table located.")
 
-        # Log a snippet of the attendance table HTML for debugging
         table_html = driver.find_element(By.ID, "tblStudent").get_attribute("innerHTML")
-        print("Attendance Table HTML snippet:", table_html[:500])
+        app.logger.debug("Attendance Table HTML snippet: %s", table_html[:500])
 
         attendance_data = driver.execute_script("""
             var table = document.getElementById('tblStudent');
             var rows = table.getElementsByTagName('tr');
             var attendance_info = [];
-            console.log("Total rows found:", rows.length);
-            for (var i = 1; i < rows.length; i++) {  // Assuming row 0 is header
+            for (var i = 1; i < rows.length; i++) {
                 var cells = rows[i].getElementsByTagName('td');
                 if (cells.length >= 7) {
                     var course = cells[2].textContent.trim();
@@ -266,7 +245,7 @@ def attendance():
             }
             return attendance_info;
         """)
-        print("Attendance data extracted:", attendance_data)
+        app.logger.info("Attendance data extracted: %s", attendance_data)
 
         results = []
         for record in attendance_data:
@@ -275,12 +254,12 @@ def attendance():
             current_percentage = record['current_percentage']
 
             safe_leave = 0
-            while (attended / (total + safe_leave + 1)) * 100 >= 80:
+            while ((attended / (total + safe_leave + 1)) * 100) >= 80:
                 safe_leave += 1
 
             need_to_attend = 0
             if current_percentage < 80:
-                while ((attended + need_to_attend + 1) / (total + need_to_attend + 1)) * 100 < 80:
+                while (((attended + need_to_attend + 1) / (total + need_to_attend + 1)) * 100) < 80:
                     need_to_attend += 1
 
             results.append({
@@ -294,9 +273,11 @@ def attendance():
 
         return jsonify({"success": True, "attendance": results})
     except Exception as e:
-        print("Attendance exception:", e)
+        app.logger.error("Attendance exception: %s", e)
         traceback.print_exc()
         return jsonify({"success": False, "message": str(e)})
 
 if __name__ == '__main__':
+    # For production with Gunicorn, consider increasing the worker timeout:
+    # gunicorn --bind 0.0.0.0:5000 --timeout 120 app:app
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Student Grade & Attendance Fetcher</title>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <style>
     body {
@@ -144,8 +143,8 @@
     <p>Enter your credentials:</p>
     <input type="text" id="username" placeholder="Username">
     <input type="password" id="password" placeholder="Password">
-    <button onclick="fetchGrades()">Fetch Grades</button>
-    <button onclick="fetchAttendance()">Fetch Attendance</button>
+    <button id="gradesBtn">Fetch Grades</button>
+    <button id="attendanceBtn">Fetch Attendance</button>
     <div id="loading"></div>
     <div id="error-message" class="error-message"></div>
   </div>
@@ -167,13 +166,13 @@
   <div id="results-container" class="hidden">
     <h2>Grade Results</h2>
     <h3 id="cgpaDisplay"></h3>
-    <input type="text" id="filterInput" onkeyup="filterTable()" placeholder="Search by course name or code...">
+    <input type="text" id="filterInput" placeholder="Search by course name or code...">
     <table id="gradesTable">
       <thead>
         <tr>
-          <th onclick="sortTable(0)">Course Code 🔽</th>
-          <th onclick="sortTable(1)">Course Name 🔽</th>
-          <th onclick="sortTable(2)">Grade 🔽</th>
+          <th data-index="0">Course Code 🔽</th>
+          <th data-index="1">Course Name 🔽</th>
+          <th data-index="2">Grade 🔽</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -201,132 +200,153 @@
   </footer>
   
   <script>
-    function fetchGrades() {
-      let username = document.getElementById("username").value;
-      let password = document.getElementById("password").value;
-      let errorMessage = document.getElementById("error-message");
+    // Wait for the DOM to be fully loaded
+    document.addEventListener("DOMContentLoaded", () => {
+      const gradesBtn = document.getElementById("gradesBtn");
+      const attendanceBtn = document.getElementById("attendanceBtn");
+
+      gradesBtn.addEventListener("click", fetchGrades);
+      attendanceBtn.addEventListener("click", fetchAttendance);
+    });
+
+    async function fetchGrades() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const errorMessage = document.getElementById("error-message");
       errorMessage.innerText = "";
-      
+
       if (!username || !password) {
         errorMessage.innerText = "Please enter both username and password.";
         return;
       }
-      
+
       document.getElementById("loading").style.display = "block";
       document.getElementById("results-container").classList.add("hidden");
-      
-      axios.post('/fetch_grades', { username, password })
-        .then(response => {
-          document.getElementById("loading").style.display = "none";
-          let data = response.data;
-          if (data.success) {
-            document.getElementById("results-container").classList.remove("hidden");
-            document.getElementById("cgpaDisplay").innerHTML = `<strong>CGPA:</strong> ${data.cgpa.toFixed(2)}`;
-            const student = data.student_data;
-            document.getElementById("studentName").innerText = student.name;
-            document.getElementById("studentRoll").innerText = student.regno;
-            document.getElementById("studentDept").innerText = student.program;
-            document.getElementById("studentImg").src = student.imgUrl;
-            document.getElementById("student-info").classList.remove("hidden");
-            
-            let tbody = document.getElementById("gradesTable").getElementsByTagName("tbody")[0];
-            tbody.innerHTML = "";
-            data.courses.forEach(course => {
-              let row = tbody.insertRow();
-              row.insertCell(0).innerText = course.code;
-              row.insertCell(1).innerText = course.name;
-              row.insertCell(2).innerText = course.grade;
-            });
-          } else {
-            errorMessage.innerText = data.message;
-          }
-        })
-        .catch(error => {
-          document.getElementById("loading").style.display = "none";
-          console.error(error);
-          if (error.response) {
-            errorMessage.innerText = `Error: ${error.response.status} - ${error.response.data.message || 'An error occurred.'}`;
-          } else if (error.request) {
-            errorMessage.innerText = "No response received from the server. Please try again later.";
-          } else {
-            errorMessage.innerText = "An error occurred while setting up the request.";
-          }
-        });
+
+      try {
+        const response = await axios.post('/fetch_grades', { username, password });
+        document.getElementById("loading").style.display = "none";
+        const data = response.data;
+        if (data.success) {
+          document.getElementById("results-container").classList.remove("hidden");
+          document.getElementById("cgpaDisplay").innerHTML = `<strong>CGPA:</strong> ${data.cgpa.toFixed(2)}`;
+
+          // Update student info
+          const student = data.student_data;
+          document.getElementById("studentName").innerText = student.name;
+          document.getElementById("studentRoll").innerText = student.regno;
+          document.getElementById("studentDept").innerText = student.program;
+          document.getElementById("studentImg").src = student.imgUrl;
+          document.getElementById("student-info").classList.remove("hidden");
+
+          // Populate grades table
+          const tbody = document.getElementById("gradesTable").getElementsByTagName("tbody")[0];
+          tbody.innerHTML = "";
+          data.courses.forEach(course => {
+            let row = tbody.insertRow();
+            row.insertCell(0).innerText = course?.code || "N/A";
+            row.insertCell(1).innerText = course?.name || "N/A";
+            row.insertCell(2).innerText = course?.grade || "N/A";
+          });
+        } else {
+          errorMessage.innerText = data.message;
+        }
+      } catch (error) {
+        document.getElementById("loading").style.display = "none";
+        console.error(error);
+        if (error.response) {
+          errorMessage.innerText = `Error: ${error.response.status} - ${error.response.data.message || 'An error occurred.'}`;
+        } else if (error.request) {
+          errorMessage.innerText = "No response received from the server. Please try again later.";
+        } else {
+          errorMessage.innerText = "An error occurred while setting up the request.";
+        }
+      }
     }
 
-    function fetchAttendance() {
-      let username = document.getElementById("username").value;
-      let password = document.getElementById("password").value;
-      let errorMessage = document.getElementById("error-message");
+    async function fetchAttendance() {
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value.trim();
+      const errorMessage = document.getElementById("error-message");
       errorMessage.innerText = "";
-      
+
       if (!username) {
         errorMessage.innerText = "Please enter username (and password if not logged in) to fetch attendance.";
         return;
       }
-      
+
       document.getElementById("loading").style.display = "block";
       document.getElementById("attendance-container").classList.add("hidden");
-      
-      axios.post('/attendance', { username, password })
-        .then(response => {
-          document.getElementById("loading").style.display = "none";
-          let data = response.data;
-          if (data.success) {
-            document.getElementById("attendance-container").classList.remove("hidden");
-            let tbody = document.getElementById("attendanceTable").getElementsByTagName("tbody")[0];
-            tbody.innerHTML = "";
-            data.attendance.forEach(record => {
-              let row = tbody.insertRow();
-              row.insertCell(0).innerText = record.course;
-              row.insertCell(1).innerText = record.attended;
-              row.insertCell(2).innerText = record.total;
-              row.insertCell(3).innerText = record.current_percentage+" %";
-              row.insertCell(4).innerText = record.safe_leave_days;
-              row.insertCell(5).innerText = record.classes_needed_for_80;
-            });
-          } else {
-            errorMessage.innerText = data.message;
-          }
-        })
-        .catch(error => {
-          document.getElementById("loading").style.display = "none";
-          console.error(error);
-          if (error.response) {
-            errorMessage.innerText = `Error: ${error.response.status} - ${error.response.data.message || 'An error occurred.'}`;
-          } else if (error.request) {
-            errorMessage.innerText = "No response received from the server. Please try again later.";
-          } else {
-            errorMessage.innerText = "An error occurred while setting up the request.";
-          }
-        });
+
+      try {
+        const response = await axios.post('/attendance', { username, password });
+        document.getElementById("loading").style.display = "none";
+        const data = response.data;
+        if (data.success) {
+          document.getElementById("attendance-container").classList.remove("hidden");
+          const tbody = document.getElementById("attendanceTable").getElementsByTagName("tbody")[0];
+          tbody.innerHTML = "";
+          data.attendance.forEach(record => {
+            let row = tbody.insertRow();
+            row.insertCell(0).innerText = record.course || "N/A";
+            row.insertCell(1).innerText = record.attended ?? 0;
+            row.insertCell(2).innerText = record.total ?? 0;
+            row.insertCell(3).innerText = `${record.current_percentage ?? 0} %`;
+            row.insertCell(4).innerText = record.safe_leave_days ?? 0;
+            row.insertCell(5).innerText = record.classes_needed_for_80 ?? 0;
+          });
+        } else {
+          errorMessage.innerText = data.message;
+        }
+      } catch (error) {
+        document.getElementById("loading").style.display = "none";
+        console.error(error);
+        if (error.response) {
+          errorMessage.innerText = `Error: ${error.response.status} - ${error.response.data.message || 'An error occurred.'}`;
+        } else if (error.request) {
+          errorMessage.innerText = "No response received from the server. Please try again later.";
+        } else {
+          errorMessage.innerText = "An error occurred while setting up the request.";
+        }
+      }
     }
 
     function filterTable() {
-      let input = document.getElementById("filterInput").value.toUpperCase();
-      let table = document.getElementById("gradesTable");
-      let tr = table.getElementsByTagName("tr");
-      for (let i = 1; i < tr.length; i++) {
-        let code = tr[i].getElementsByTagName("td")[0]?.textContent.toUpperCase() || "";
-        let name = tr[i].getElementsByTagName("td")[1]?.textContent.toUpperCase() || "";
-        tr[i].style.display = (code.includes(input) || name.includes(input)) ? "" : "none";
+      const input = document.getElementById("filterInput").value.toUpperCase();
+      const table = document.getElementById("gradesTable");
+      const rows = table.getElementsByTagName("tr");
+      for (let i = 1; i < rows.length; i++) {
+        const code = rows[i].cells[0]?.textContent.toUpperCase() || "";
+        const name = rows[i].cells[1]?.textContent.toUpperCase() || "";
+        rows[i].style.display = (code.includes(input) || name.includes(input)) ? "" : "none";
       }
     }
 
     function sortTable(columnIndex) {
-      let table = document.getElementById("gradesTable");
-      let tbody = table.tBodies[0];
-      let rows = Array.from(tbody.rows);
-      let isAscending = table.getAttribute("data-sort") !== "asc";
+      const table = document.getElementById("gradesTable");
+      const tbody = table.tBodies[0];
+      const rows = Array.from(tbody.rows);
+      const isAscending = table.getAttribute("data-sort") !== "asc";
       rows.sort((a, b) => {
-        let cellA = a.cells[columnIndex].textContent.trim().toUpperCase();
-        let cellB = b.cells[columnIndex].textContent.trim().toUpperCase();
+        const cellA = a.cells[columnIndex]?.textContent.trim().toUpperCase() || "";
+        const cellB = b.cells[columnIndex]?.textContent.trim().toUpperCase() || "";
         return isAscending ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
       });
       tbody.innerHTML = "";
       rows.forEach(row => tbody.appendChild(row));
       table.setAttribute("data-sort", isAscending ? "asc" : "desc");
     }
+
+    // Add click listeners to table headers for sorting
+    document.addEventListener("DOMContentLoaded", () => {
+      const headers = document.querySelectorAll("#gradesTable th");
+      headers.forEach(header => {
+        header.addEventListener("click", () => {
+          const colIndex = header.getAttribute("data-index");
+          sortTable(Number(colIndex));
+        });
+      });
+    });
   </script>
 </body>
 </html>
