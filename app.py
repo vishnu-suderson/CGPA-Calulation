@@ -277,6 +277,25 @@ def attendance():
         traceback.print_exc()
         return jsonify({"success": False, "message": str(e)})
 
+@app.route("/robots.txt")
+def robots():
+    return Response(
+        "User-agent: *\nAllow: /\nSitemap: https://cgpa-calulation.onrender.com/sitemap.xml",
+        mimetype='text/plain'
+    )
+
+@app.route("/sitemap.xml")
+def sitemap():
+    sitemap_xml = '''<?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        <url>
+            <loc>https://cgpa-calulation.onrender.com/</loc>
+            <changefreq>monthly</changefreq>
+            <priority>1.0</priority>
+        </url>
+    </urlset>'''
+    return Response(sitemap_xml, mimetype='application/xml')
+
 if __name__ == '__main__':
     # For production with Gunicorn, consider increasing the worker timeout:
     # gunicorn --bind 0.0.0.0:5000 --timeout 120 app:app
