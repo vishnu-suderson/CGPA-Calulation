@@ -287,13 +287,21 @@ def robots():
 @app.route("/sitemap.xml")
 def sitemap():
     sitemap_xml = '''<?xml version="1.0" encoding="UTF-8"?>
-    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-        <url>
-            <loc>https://cgpa-calulation.onrender.com/</loc>
-            <changefreq>monthly</changefreq>
-            <priority>1.0</priority>
-        </url>
-    </urlset>'''
+<urlset
+      xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+            http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+<!-- created with Free Online Sitemap Generator www.xml-sitemaps.com -->
+
+
+<url>
+  <loc>https://cgpa-calulation.onrender.com/</loc>
+  <lastmod>2025-06-27T08:42:49+00:00</lastmod>
+</url>
+
+
+</urlset>'''
     return Response(sitemap_xml, mimetype='application/xml')
 
 @app.route('/google8a7b5f28e360f02c.html')
