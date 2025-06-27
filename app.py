@@ -298,7 +298,7 @@ def sitemap():
 
 @app.route('/google8a7b5f28e360f02c.html')
 def search_console():
-    render_template('google8a7b5f28e360f02c.html')
+    return render_template('google8a7b5f28e360f02c.html')
 
 if __name__ == '__main__':
     # For production with Gunicorn, consider increasing the worker timeout:
