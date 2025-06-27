@@ -296,6 +296,10 @@ def sitemap():
     </urlset>'''
     return Response(sitemap_xml, mimetype='application/xml')
 
+@app.route('/google8a7b5f28e360f02c.html')
+def search_console():
+    render_template('google8a7b5f28e360f02c.html')
+
 if __name__ == '__main__':
     # For production with Gunicorn, consider increasing the worker timeout:
     # gunicorn --bind 0.0.0.0:5000 --timeout 120 app:app
